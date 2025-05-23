@@ -1,0 +1,54 @@
+# File: terraform/sentinel/enforce-approved-vm-sizes.sentinel
+# This Sentinel policy enforces that only specific VM sizes can be used
+# It ALLOWS Standard_D2s_v3 and Standard_D4s_v3
+
+import "tfplan/v2" as tfplan
+
+# List of approved VM sizes for production workloads
+approved_vm_sizes = [
+    "Standard_D2s_v3",
+    "Standard_D4s_v3",
+    "Standard_B2ms",
+]
+
+# Get all Azure VMs from the plan
+allAzureVMs = filter tfplan.resource_changes as _, resource_changes {
+    resource_changes.type is "azurerm_virtual_machine" or
+    resource_changes.type is "azurerm_linux_virtual_machine" or
+    resource_changes.type is "azurerm_windows_virtual_machine" and
+    resource_changes.mode is "managed" and
+    (resource_changes.change.actions contains "create" or
+     resource_changes.change.actions contains "update")
+}
+
+# Function to validate VM sizes
+validate_vm_sizes = func() {
+    validated = true
+    
+    for allAzureVMs as address, vm {
+        # Extract the VM size from the resource
+        vm_size = vm.change.after.size
+        
+        if vm_size not in approved_vm_sizes {
+            print("ERROR: VM", address, "uses unapproved size:", vm_size)
+            print("Approved sizes are:", approved_vm_sizes)
+            validated = false
+        }
+    }
+    
+    return validated
+}
+
+# Main rule
+main = rule {
+    validate_vm_sizes()
+}
+
+# Policy metadata
+metadata = {
+    "policy_id": "SENTINEL-VM-001",
+    "description": "Enforce approved VM sizes for cost control",
+    "enforcement_level": "hard-mandatory",
+    "owner": "platform-team@company.com",
+    "version": "1.0.0",
+}

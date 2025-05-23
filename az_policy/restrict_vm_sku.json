@@ -1,0 +1,81 @@
+{
+  "properties": {
+    "displayName": "Restrict VM SKUs for Security Compliance",
+    "policyType": "Custom",
+    "mode": "Indexed",
+    "description": "This policy restricts virtual machine sizes to ensure security compliance. Only specific hardened VM sizes are allowed.",
+    "metadata": {
+      "policy_id": "AZURE-POL-VM-001",
+      "version": "1.0.0",
+      "category": "Compute",
+      "owner": "security-team@company.com"
+    },
+    "parameters": {
+      "listOfDeniedSKUs": {
+        "type": "Array",
+        "metadata": {
+          "displayName": "Denied VM SKUs",
+          "description": "The list of VM sizes that are explicitly denied"
+        },
+        "defaultValue": [
+          "Standard_D2s_v3",
+          "Standard_D4s_v3",
+          "Standard_B1s",
+          "Standard_B1ms"
+        ]
+      },
+      "listOfAllowedSKUs": {
+        "type": "Array",
+        "metadata": {
+          "displayName": "Allowed VM SKUs",
+          "description": "The list of VM sizes that are allowed for security compliance"
+        },
+        "defaultValue": [
+          "Standard_D2s_v5",
+          "Standard_D4s_v5",
+          "Standard_B2ms",
+          "Standard_B4ms"
+        ]
+      }
+    },
+    "policyRule": {
+      "if": {
+        "allOf": [
+          {
+            "field": "type",
+            "in": [
+              "Microsoft.Compute/virtualMachines",
+              "Microsoft.Compute/VirtualMachineScaleSets"
+            ]
+          },
+          {
+            "anyOf": [
+              {
+                "field": "Microsoft.Compute/virtualMachines/sku.name",
+                "in": "[parameters('listOfDeniedSKUs')]"
+              },
+              {
+                "field": "Microsoft.Compute/virtualMachines/sku.name",
+                "notIn": "[parameters('listOfAllowedSKUs')]"
+              },
+              {
+                "field": "Microsoft.Compute/VirtualMachineScaleSets/sku.name",
+                "in": "[parameters('listOfDeniedSKUs')]"
+              },
+              {
+                "field": "Microsoft.Compute/VirtualMachineScaleSets/sku.name",
+                "notIn": "[parameters('listOfAllowedSKUs')]"
+              }
+            ]
+          }
+        ]
+      },
+      "then": {
+        "effect": "deny"
+      }
+    }
+  },
+  "id": "/subscriptions/{subscription-id}/providers/Microsoft.Authorization/policyDefinitions/restrict-vm-skus-security",
+  "type": "Microsoft.Authorization/policyDefinitions",
+  "name": "restrict-vm-skus-security"
+}
