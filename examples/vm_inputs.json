@@ -1,0 +1,308 @@
+{
+  "aws_ec2_examples": {
+    "compliant_instance": {
+      "resource_type": "instance",
+      "platform": "aws_ec2",
+      "instance_id": "i-0123456789abcdef0",
+      "name": "prod-web-server-01",
+      "instance_type": "m5.large",
+      "state": "running",
+      "vpc_id": "vpc-12345678",
+      "subnet_id": "subnet-12345678",
+      "availability_zone": "us-east-1a",
+      "public_ip_address": null,
+      "private_ip_address": "10.0.1.100",
+      "source_dest_check": true,
+      "monitoring": {
+        "state": "enabled"
+      },
+      "iam_instance_profile": {
+        "arn": "arn:aws:iam::123456789012:instance-profile/EC2-CloudWatch-Role"
+      },
+      "security_groups": [
+        {
+          "group_id": "sg-0123456789abcdef0",
+          "group_name": "prod-web-sg"
+        }
+      ],
+      "block_device_mappings": [
+        {
+          "device_name": "/dev/sda1",
+          "ebs": {
+            "volume_id": "vol-0123456789abcdef0",
+            "encrypted": true,
+            "kms_key_id": "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+          }
+        },
+        {
+          "device_name": "/dev/sdf",
+          "ebs": {
+            "volume_id": "vol-0123456789abcdef1",
+            "encrypted": true
+          }
+        }
+      ],
+      "tags": {
+        "Name": "prod-web-server-01",
+        "Environment": "production",
+        "patch-group": "prod-linux-servers",
+        "backup-plan": "daily-backup",
+        "cloudwatch-agent-installed": "true",
+        "Owner": "devops-team",
+        "CostCenter": "engineering"
+      },
+      "metadata": {
+        "ssh_password_authentication_disabled": true
+      },
+      "disable_api_termination": true
+    },
+    
+    "non_compliant_instance": {
+      "resource_type": "instance",
+      "platform": "aws_ec2",
+      "instance_id": "i-9876543210fedcba0",
+      "name": "dev-test-server",
+      "instance_type": "t2.micro",
+      "state": "running",
+      "public_ip_address": "54.123.45.67",
+      "source_dest_check": true,
+      "monitoring": {
+        "state": "disabled"
+      },
+      "security_groups": [
+        {
+          "group_id": "sg-9876543210fedcba0"
+        }
+      ],
+      "block_device_mappings": [
+        {
+          "device_name": "/dev/sda1",
+          "ebs": {
+            "volume_id": "vol-9876543210fedcba0",
+            "encrypted": false
+          }
+        }
+      ],
+      "tags": {
+        "Name": "dev-test-server"
+      },
+      "metadata": {},
+      "disable_api_termination": false
+    }
+  },
+  
+  "azure_vm_examples": {
+    "compliant_vm": {
+      "resource_type": "virtual_machine",
+      "platform": "azure_vm",
+      "name": "prod-vm-01",
+      "location": "eastus",
+      "vm_size": "Standard_D4s_v4",
+      "state": "running",
+      "identity": {
+        "type": "SystemAssigned",
+        "principal_id": "12345678-1234-1234-1234-123456789012"
+      },
+      "storage_profile": {
+        "os_disk": {
+          "name": "prod-vm-01-osdisk",
+          "encryption_settings": {
+            "enabled": true,
+            "disk_encryption_key": {
+              "source_vault": {
+                "id": "/subscriptions/sub-id/resourceGroups/rg/providers/Microsoft.KeyVault/vaults/vault"
+              }
+            }
+          }
+        },
+        "data_disks": [
+          {
+            "name": "prod-vm-01-datadisk1",
+            "lun": 0,
+            "encryption_settings": {
+              "enabled": true
+            }
+          }
+        ]
+      },
+      "network_profile": {
+        "network_interfaces": [
+          {
+            "id": "/subscriptions/sub-id/resourceGroups/rg/providers/Microsoft.Network/networkInterfaces/nic",
+            "ip_configurations": [
+              {
+                "private_ip_address": "10.0.1.10",
+                "public_ip_address": null
+              }
+            ]
+          }
+        ],
+        "network_security_group": {
+          "id": "/subscriptions/sub-id/resourceGroups/rg/providers/Microsoft.Network/networkSecurityGroups/nsg"
+        }
+      },
+      "os_profile": {
+        "computer_name": "prod-vm-01",
+        "admin_username": "azureuser",
+        "linux_configuration": {
+          "disable_password_authentication": true,
+          "patch_settings": {
+            "patch_mode": "AutomaticByPlatform",
+            "assessment_mode": "AutomaticByPlatform"
+          }
+        }
+      },
+      "diagnostics_profile": {
+        "boot_diagnostics": {
+          "enabled": true,
+          "storage_uri": "https://diagstorage.blob.core.windows.net/"
+        }
+      },
+      "resources": {
+        "extensions": [
+          {
+            "name": "OmsAgentForLinux",
+            "type": "OmsAgentForLinux",
+            "type_handler_version": "1.13"
+          }
+        ]
+      },
+      "backup": {
+        "policy_id": "/subscriptions/sub-id/resourceGroups/rg/providers/Microsoft.RecoveryServices/vaults/vault/policies/policy",
+        "retention_days": 30
+      },
+      "resource_lock": {
+        "level": "CanNotDelete"
+      },
+      "tags": {
+        "Environment": "production",
+        "Owner": "platform-team"
+      }
+    }
+  },
+  
+  "gcp_compute_examples": {
+    "compliant_instance": {
+      "resource_type": "instance",
+      "platform": "gcp_compute",
+      "name": "prod-instance-01",
+      "instance_id": "1234567890123456789",
+      "machine_type": "n2-standard-4",
+      "state": "running",
+      "zone": "us-central1-a",
+      "network_interfaces": [
+        {
+          "network": "projects/my-project/global/networks/prod-vpc",
+          "subnetwork": "projects/my-project/regions/us-central1/subnetworks/prod-subnet",
+          "network_ip": "10.128.0.10",
+          "access_configs": []
+        }
+      ],
+      "disks": [
+        {
+          "device_name": "boot-disk",
+          "source": "projects/my-project/zones/us-central1-a/disks/prod-instance-01-boot",
+          "boot": true,
+          "disk_encryption_key": {
+            "kms_key_name": "projects/my-project/locations/global/keyRings/prod-keyring/cryptoKeys/disk-key"
+          }
+        },
+        {
+          "device_name": "data-disk",
+          "source": "projects/my-project/zones/us-central1-a/disks/prod-instance-01-data",
+          "boot": false,
+          "disk_encryption_key": {
+            "kms_key_name": "projects/my-project/locations/global/keyRings/prod-keyring/cryptoKeys/disk-key"
+          }
+        }
+      ],
+      "metadata": {
+        "items": [
+          {
+            "key": "enable-oslogin",
+            "value": "TRUE"
+          },
+          {
+            "key": "enable-ops-agent",
+            "value": "true"
+          },
+          {
+            "key": "enable-guest-attributes",
+            "value": "TRUE"
+          }
+        ]
+      },
+      "tags": {
+        "items": ["prod-web", "https-server"]
+      },
+      "labels": {
+        "environment": "production",
+        "team": "platform"
+      },
+      "deletion_protection": true
+    }
+  },
+  
+  "vmware_vsphere_examples": {
+    "compliant_vm": {
+      "resource_type": "virtual_machine",
+      "platform": "vmware_vsphere",
+      "name": "PROD-WEB-01",
+      "vm_id": "vm-1234",
+      "state": "poweredOn",
+      "guest_os": "ubuntu64Guest",
+      "num_cpus": 4,
+      "memory_mb": 8192,
+      "hardware_version": "vmx-19",
+      "disks": [
+        {
+          "label": "Hard disk 1",
+          "size_gb": 100,
+          "encryption": {
+            "enabled": true,
+            "key_provider": "kmip-server-01"
+          }
+        }
+      ],
+      "network_adapters": [
+        {
+          "name": "Network adapter 1",
+          "network": "PROD-VLAN-100",
+          "connected": true
+        }
+      ],
+      "advanced_config": {
+        "isolation.tools.copy.disable": "true",
+        "isolation.tools.paste.disable": "true",
+        "log.rotateSize": "1024000",
+        "log.keepOld": "10",
+        "RemoteDisplay.vnc.enabled": "false",
+        "tools.guestlib.enableHostInfo": "false"
+      },
+      "vm_tools": {
+        "version": "11365",
+        "status": "toolsOk",
+        "auto_update": true
+      },
+      "snapshot_info": {
+        "current_snapshot": null,
+        "snapshot_count": 0
+      },
+      "backup": {
+        "solution": "veeam",
+        "job_name": "PROD-Daily-Backup",
+        "retention_days": 14
+      },
+      "tags": [
+        {
+          "category": "Environment",
+          "name": "Production"
+        },
+        {
+          "category": "Backup",
+          "name": "Daily"
+        }
+      ]
+    }
+  }
+}

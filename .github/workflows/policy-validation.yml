@@ -1,0 +1,226 @@
+# GitHub Actions workflow for policy validation and deployment
+# Location: .github/workflows/policy-validation.yml
+
+name: Policy Validation and Compliance Check
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'policies/**'
+      - 'tests/**'
+      - '.github/workflows/policy-validation.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'policies/**'
+
+env:
+  OPA_VERSION: "0.60.0"
+  COVERAGE_THRESHOLD: 80
+
+jobs:
+  validate-syntax:
+    name: Validate Policy Syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup OPA
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: ${{ env.OPA_VERSION }}
+      
+      - name: Format Check
+        run: |
+          echo "Checking policy formatting..."
+          opa fmt --list policies/
+          
+      - name: Syntax Validation
+        run: |
+          echo "Validating policy syntax..."
+          find policies/ -name "*.rego" -type f | while read -r policy; do
+            echo "Checking $policy"
+            opa parse "$policy"
+          done
+          
+      - name: Capabilities Check
+        run: |
+          echo "Checking for deprecated features..."
+          opa capabilities --current > current.json
+          opa capabilities --version v0.60.0 > target.json
+          diff -u current.json target.json || true
+
+  unit-tests:
+    name: Run Policy Tests
+    runs-on: ubuntu-latest
+    needs: validate-syntax
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup OPA
+        uses: open-policy-agent/setup-opa@v2
+        with:
+          version: ${{ env.OPA_VERSION }}
+      
+      - name: Run Unit Tests
+        run: |
+          echo "Running policy unit tests..."
+          opa test -v policies/ tests/ --coverage --format=json | tee test-results.json
+          
+      - name: Check Coverage
+        run: |
+          coverage=$(cat test-results.json | jq '.coverage // 0')
+          echo "Coverage: ${coverage}%"
+          if (( $(echo "$coverage < $COVERAGE_THRESHOLD" | bc -l) )); then
+            echo "Coverage ${coverage}% is below threshold ${COVERAGE_THRESHOLD}%"
+            exit 1
+          fi
+      
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results
+          path: test-results.json
+
+  integration-tests:
+    name: Integration Testing
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Test Environment
+        run: |
+          # Install test dependencies
+          curl -L -o conftest https://github.com/open-policy-agent/conftest/releases/latest/download/conftest_Linux_x86_64
+          chmod +x conftest
+          sudo mv conftest /usr/local/bin
+      
+      - name: Test Against Sample Resources
+        run: |
+          echo "Testing policies against sample Kubernetes resources..."
+          conftest verify --policy policies/ --data tests/fixtures/
+
+  security-scan:
+    name: Security Analysis
+    runs-on: ubuntu-latest
+    needs: validate-syntax
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            
+      - name: Check for Secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+
+  compliance-check:
+    name: Compliance Mapping Validation
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: Install Dependencies
+        run: |
+          pip install pyyaml jsonschema
+          
+      - name: Validate Compliance Mappings
+        run: |
+          python scripts/validate_compliance_mappings.py
+          
+      - name: Generate Compliance Report
+        run: |
+          python scripts/generate_compliance_report.py \
+            --policies policies/ \
+            --output compliance-report.md
+            
+      - name: Upload Compliance Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: compliance-report
+          path: compliance-report.md
+
+  deploy:
+    name: Deploy Policies
+    runs-on: ubuntu-latest
+    needs: [integration-tests, security-scan, compliance-check]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Bundle Policies
+        run: |
+          opa build -b policies/ -o bundle.tar.gz
+          
+      - name: Deploy to OPA Server
+        env:
+          OPA_SERVER_URL: ${{ secrets.OPA_SERVER_URL }}
+          OPA_SERVER_TOKEN: ${{ secrets.OPA_SERVER_TOKEN }}
+        run: |
+          curl -X PUT \
+            -H "Authorization: Bearer ${OPA_SERVER_TOKEN}" \
+            -H "Content-Type: application/vnd.openpolicyagent.bundles" \
+            --data-binary @bundle.tar.gz \
+            "${OPA_SERVER_URL}/v1/policies"
+            
+      - name: Tag Release
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          VERSION=$(date +%Y.%m.%d-%H%M%S)
+          git tag -a "v${VERSION}" -m "Policy release ${VERSION}"
+          git push origin "v${VERSION}"
+          
+      - name: Create Release Notes
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ env.VERSION }}
+          release_name: Policy Release ${{ env.VERSION }}
+          body: |
+            ## Policy Updates
+            
+            Automated release of policy changes.
+            
+            ### Changes
+            ${{ github.event.head_commit.message }}
+            
+            ### Compliance Report
+            See attached compliance-report.md
+          draft: false
+          prerelease: false
+
+  notify:
+    name: Send Notifications
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: always()
+    steps:
+      - name: Slack Notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            Policy Deployment ${{ job.status }}
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref }}
+            Commit: ${{ github.sha }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+        if: always()
